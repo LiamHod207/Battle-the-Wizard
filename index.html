@@ -6,17 +6,21 @@
     </head>
     <body>
         <!---------------------------------------------------------------------------------------------------------------------------------------------------
-        PLEASE DON'T CHANGE ANYTHING!!!
+        PLEASE DON'T CHANGE ANYTHING!!!   https://www.youtube.com/watch?v=EA4h8l2zZ1g
         ---------------------------------------------------------------------------------------------------------------------------------------------------->
         <!---------------------------------------------------------------------------------------------------------------------------------------------------
         Title Text
         ---------------------------------------------------------------------------------------------------------------------------------------------------->
         <h1>Battle the Wizard</h1>
         <h2>Made by Liam :)</h2>
-        <p class = "title_text">Check instructions to play the game, refresh to restart</p>
+        <p class = "title_text">Check instructions to play the game, refresh to restart, and change the enemy hp if the game is too easy or too hard</p>
 
         <div class="battle-wrapper">
         <button class="instructions-btn" onclick="document.getElementById('instructions-panel').classList.toggle('instructions-panel-open')">Instructions</button>
+        <div class="hp-setter">
+            <input type="number" id="hp-setter-input" min="1" step="1" placeholder="Enemy HP">
+            <button onclick="setEnemyHp()">Set HP</button>
+        </div>
         <div id="instructions-panel" class="instructions-panel">
             <p>Instructions:</p>
             <p></p>
@@ -202,6 +206,10 @@
 
 <!--
 TO DO LIST:
+
+    -win + lose text
+    -sound effects + music
+    -extra sprites
 
 -FINAL STUFF:
     -BUG: ATTACKER cannot heal self when using heart card

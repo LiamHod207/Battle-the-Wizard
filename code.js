@@ -3,8 +3,10 @@
 //-------------------------------------------------------------------------------------------------------------------------------
 
 let Stamina = 0;
-let enemyHp = 200;
-let fullEnemyHp = 200;
+const _enemyHpOverride = localStorage.getItem('enemyHpOverride');
+localStorage.removeItem('enemyHpOverride');
+let enemyHp = _enemyHpOverride ? parseInt(_enemyHpOverride) : 200;
+let fullEnemyHp = _enemyHpOverride ? parseInt(_enemyHpOverride) : 200;
 let cardType = null;
 let cardNumber = 0;
 let defender_immune_counter = null;
@@ -15,6 +17,10 @@ let enemy_stamina = 0;
 let enemy_plan = 0;
 let enemy_chance = 0;
 let enemy_attack = "defend";
+let enemy_main_stamina = 4;
+let main_cancel = 0;
+let main_damage_dealt = 0;
+let enemy_main_charging = false;
 let shieldTarget = null;
 let healTarget = null;
 let lastHealAmount = 0;
@@ -63,6 +69,7 @@ const player1HpDisplay = document.getElementById("player1-hp");
 const player2HpDisplay = document.getElementById("player2-hp");
 const player3HpDisplay = document.getElementById("player3-hp");
 const enemyHpDisplay = document.getElementById("enemy-hp");
+enemyHpDisplay.textContent = "Enemy HP: " + enemyHp;
 
 const spriteAttacker = document.getElementById("sprite-attacker");
 const spriteDefender = document.getElementById("sprite-defender");
@@ -156,6 +163,56 @@ function updateShieldDisplays() {
     }
 }
 
+function playSound(type) {
+    if (type == "defend-hit") {
+        soundtype = getRandomInteger(1, 3)
+        if (soundtype == 1) {
+            audio = new Audio('hitsound.mp3');
+        } else if (soundtype == 2) {
+            audio = new Audio('hitsound2.mp3');
+        } else if (soundtype == 3) {
+            audio = new Audio('hitsound3.mp3');
+        }
+    } else if (type == "lose") {
+        audio = new Audio('lose.mp3')
+    } else if (type == "light-charge") {
+        audio = new Audio('lightning-charge.mp3')
+    } else if (type == "light-attack") {
+        audio = new Audio('lightning-attack.mp3')
+    } else if (type == "win") {
+        audio = new Audio('win.mp3')
+    } else if (type == "heal") {
+        audio = new Audio('heal.mp3')
+    } else if (type == "fresh-air") {
+        audio = new Audio('fresh-air.mp3')
+    } else if (type == "enemy-heal") {
+        audio = new Audio('enemy_heal.mp3')
+    } else if (type == "roar") {
+        audio = new Audio('roar.mp3')
+    } else if (type == "explo") {
+        audio = new Audio('explosion.mp3')
+    } else if (type == "dead") {
+        audio = new Audio('dead.mp3')
+    } else if (type == "hit") {
+        soundtype = getRandomInteger(1, 6)
+        if (soundtype == 1) {
+            audio = new Audio('hit1.mp3');
+        } else if (soundtype == 2) {
+            audio = new Audio('hit2.mp3');
+        } else if (soundtype == 3) {
+            audio = new Audio('hit3.mp3');
+        } else if (soundtype == 4) {
+            audio = new Audio('hit4.mp3');
+        } else if (soundtype == 5) {
+            audio = new Audio('hit5.mp3');
+        } else if (soundtype == 6) {
+            audio = new Audio('hit6.mp3');
+        }
+    }
+    audio.play();
+    
+}
+
 function shakeSprite(element) {
     if (!element) return;
     element.classList.remove('shake');
@@ -234,6 +291,56 @@ function playShieldAnimation(targetPlayer) {
 }
 
 
+
+function showEndScreen(type) {
+    const img = document.createElement('img');
+    img.src = type === 'win' ? 'Win_Text.png' : 'Lose_Text.png';
+    const sceneEl = document.querySelector('.battle-scene');
+    const statsBar = document.querySelector('.stats-bar');
+    const battleArea = document.querySelector('.battle-area');
+
+    Object.assign(img.style, {
+        position: 'absolute',
+        height: 'auto',
+        imageRendering: 'pixelated',
+        zIndex: '9999',
+        pointerEvents: 'none',
+        opacity: '0',
+        transition: 'opacity 0.8s ease, top 0.8s ease',
+        filter: 'drop-shadow(3px 4px 0px rgba(0,0,0,0.2))',
+    });
+    sceneEl.appendChild(img);
+    if (type == "win") {
+        playSound("win");
+    } else if (type == "lose") {
+        playSound("lose");
+    }
+    
+
+    function animate() {
+        const sceneW = sceneEl.offsetWidth;
+        const statsH = statsBar.offsetHeight;
+        const areaH = battleArea.offsetHeight;
+        const sceneH = sceneEl.offsetHeight;
+        const imgW = Math.round(sceneW * 0.55);
+        const imgH = Math.round(img.naturalHeight * (imgW / img.naturalWidth));
+        img.style.width = imgW + 'px';
+        img.style.left = (sceneW / 2 - imgW / 2) + 'px';
+        img.style.top = sceneH + 'px';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                img.style.opacity = '1';
+                img.style.top = (statsH + areaH / 2 - imgH / 2) + 'px';
+            });
+        });
+    }
+
+    if (img.complete && img.naturalWidth > 0) {
+        animate();
+    } else {
+        img.onload = animate;
+    }
+}
 
 function applyHeal(player) {
     const healAmount = Math.min(30, player.max_hp - player.health);
@@ -322,29 +429,62 @@ function CheckStamina() {
 
 function EnemyPlan() {
     enemy_chance = getRandomInteger(1, 100)
-    if (enemyHp == fullEnemyHp) {
-        if (enemy_chance <= 50) {
-            return enemy_attack = "attack"
+    if (enemy_stamina >= enemy_main_stamina) {
+        if (enemyHp == fullEnemyHp) {
+            if (enemy_chance <= 40) {
+                return enemy_attack = "attack"
+            } else if (enemy_chance <= 80){
+                return enemy_attack = "main"
+            } else {
+                return enemy_attack = "defend"
+            }
+        }else if (enemyHp >= (fullEnemyHp / 2)) {
+            if (enemy_chance <= 30) {
+                return enemy_attack = "attack"
+            } else if (enemy_chance <= 50){
+                return enemy_attack = "main"
+            }else if (enemy_chance <= 75) {
+                return enemy_attack = "defend"
+            } else {
+                return enemy_attack = "heal"
+            }
         } else {
-            return enemy_attack = "defend"
-        }
-    }else if (enemyHp >= (fullEnemyHp / 2)) {
-        if (enemy_chance <= 50) {
-            return enemy_attack = "attack"
-        } else if (enemy_chance <= 75) {
-            return enemy_attack = "defend"
-        } else {
-            return enemy_attack = "heal"
+            if (enemy_chance <= 30) {
+                return enemy_attack = "heal"
+            } else if (enemy_chance <= 50) {
+                return enemy_attack = "main"
+            } else if (enemy_chance <= 70) {
+                return enemy_attack = "attack"
+            } else {
+                return enemy_attack = "defend"
+            }
         }
     } else {
-        if (enemy_chance <= 30) {
-            return enemy_attack = "heal"
-        } else if (enemy_chance <= 70) {
-            return enemy_attack = "attack"
+        if (enemyHp == fullEnemyHp) {
+            if (enemy_chance <= 50) {
+                return enemy_attack = "attack"
+            } else {
+                return enemy_attack = "defend"
+            }
+        }else if (enemyHp >= (fullEnemyHp / 2)) {
+            if (enemy_chance <= 50) {
+                return enemy_attack = "attack"
+            } else if (enemy_chance <= 75) {
+                return enemy_attack = "defend"
+            } else {
+                return enemy_attack = "heal"
+            }
         } else {
-            return enemy_attack = "defend"
+            if (enemy_chance <= 30) {
+                return enemy_attack = "heal"
+            } else if (enemy_chance <= 70) {
+                return enemy_attack = "attack"
+            } else {
+                return enemy_attack = "defend"
+            }
         }
     }
+    
 }
 
 function switchTab(playerNum) {
@@ -426,7 +566,10 @@ function PlayerReady(player) {
 //-------------------------------------------------------------------------------------------------------------------------------
 
 async function BeginAttack() {
-    if (enemy_stunned == false) {
+    if (enemy_main_charging) {
+        enemy_attack = "main";
+        spriteEnemy.querySelector('img').src = 'enemy_main.png';
+    } else if (enemy_stunned == false) {
         enemy_attack = EnemyPlan()
         if (enemy_attack == "defend") {
             queueText("Enemy defends itself...", textSpeeds.normal, () => { spriteEnemy.querySelector('img').src = 'Enemy_defend.png'; });
@@ -435,7 +578,7 @@ async function BeginAttack() {
             queueText("The enemy looks wounded and prepares to heal...", textSpeeds.normal, () => { spriteEnemy.querySelector('img').src = 'Enemy_heal.png'; })
             await sleep (2000);
         }
-        
+
     }
     if (ATTACKER.state == "ready") {
         if (ATTACKER.move == "basic") {
@@ -444,11 +587,15 @@ async function BeginAttack() {
 
             queueText(ATTACKER.name + " did " + player1Damage.toFixed(0) + " damage" + (defender_anger ? " (Enraged!)" : ""), textSpeeds.normal, () => shakeSprite(spriteEnemy));
             if (enemy_attack == "defend") {
+                playSound("defend-hit");
                 queueText("But the enemy defended the attack, and takes " + Math.round(player1Damage / 6) + " dmg");
                 enemyHp -= Math.round(player1Damage / 6)
+                enemy_stamina += 0.5;
                 await sleep(2500);
             } else {
+                playSound("hit");
                 enemyHp -= player1Damage;
+                if (enemy_attack == "main" && enemy_main_charging) main_damage_dealt += player1Damage;
             }
             if (enemyHp < 0) enemyHp = 0;
             enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
@@ -460,6 +607,7 @@ async function BeginAttack() {
         } else if (ATTACKER.move == "main") {
             queueText(ATTACKER.name + " pulls out a giant flintlock and aims at the enemy...");
             await sleep(1500);
+            playSound('explo');
             const flintlock_chance = getRandomInteger(1, 100)
             gun_damage = ((flintlock_chance / 5) + 80)
             if (flintlock_chance % 2 === 0) {
@@ -467,11 +615,14 @@ async function BeginAttack() {
                 if (defender_anger) finalGunDamage = Math.round(finalGunDamage * 1.1);
                 queueText("It shoots a giant bullet towards the enemy, doing " + finalGunDamage + " Damage towards the enemy" + (defender_anger ? " (Enraged!)" : ""), textSpeeds.normal, () => shakeSprite(spriteEnemy));
                 if (enemy_attack == "defend") {
+                    playSound("defend-hit");
                     queueText("But the enemy defended the attack, and takes " + Math.round(finalGunDamage / 6) + " dmg");
                     enemyHp -= Math.round(finalGunDamage / 6)
+                    enemy_stamina += 0.5;
                     await sleep(2500);
                 } else {
                     enemyHp -= finalGunDamage;
+                    if (enemy_attack == "main" && enemy_main_charging) main_damage_dealt += finalGunDamage;
                 }
                 if (enemyHp < 0) enemyHp = 0;
                 enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
@@ -484,6 +635,7 @@ async function BeginAttack() {
                     ATTACKER.state = "dead";
                     ATTACKER.shield_hp = 0;
                     ATTACKER.shield_turns = 0;
+                    playSound('dead');
                     queueText(ATTACKER.name + " has fallen!", textSpeeds.normal, () => updateSpriteState(ATTACKER, true));
                     defCooldownText1.textContent = "";
                     mainCooldownText1.textContent = "";
@@ -551,11 +703,15 @@ async function BeginAttack() {
                 queueText("(+" + enrageBonus + " Enraged!)");
             }
             if (enemy_attack == "defend") {
+                playSound("defend-hit");
                 queueText("But the enemy defended the attack, and takes " + Math.round(cardDamage / 6) + " dmg");
                 enemyHp -= Math.round(cardDamage / 6)
+                enemy_stamina += 0.5;
                 await sleep(2500);
             } else {
+                playSound("hit");
                 enemyHp -= cardDamage;
+                if (enemy_attack == "main" && enemy_main_charging) main_damage_dealt += cardDamage;
             }
             if (enemy_stunned == true) {
                 enemy_attack = null
@@ -572,11 +728,15 @@ async function BeginAttack() {
             const player2Damage = getRandomInteger(1, 20);
             queueText(DEFENDER.name + " did " + player2Damage.toFixed(0) + " damage", textSpeeds.normal, () => shakeSprite(spriteEnemy));
             if (enemy_attack == "defend") {
+                playSound("defend-hit");
                 queueText("But the enemy defended the attack, and takes " + Math.round(player2Damage / 6) + " dmg");
                 enemyHp -= Math.round(player2Damage / 6)
+                enemy_stamina += 0.5;
                 await sleep(2500);
             } else {
+                playSound("hit");
                 enemyHp -= player2Damage;
+                if (enemy_attack == "main" && enemy_main_charging) main_damage_dealt += player2Damage;
             }
             if (enemyHp < 0) enemyHp = 0;
             enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
@@ -585,6 +745,7 @@ async function BeginAttack() {
             DEFENDER.state = "defend"
             queueText(DEFENDER.name + " defends himself", textSpeeds.normal, () => setPlayerSprite(DEFENDER, 'defend'));
         } else if (DEFENDER.move == "main") {
+            playSound('roar');
             defender_immune_counter = 3
             defender_anger = true;
             enrageCounterText.textContent = "Enraged: 3 turns";
@@ -601,16 +762,17 @@ async function BeginAttack() {
         if (HEALER.move == "basic") {
             let player3Damage = getRandomInteger(1, 20);
             if (defender_anger) player3Damage = Math.round(player3Damage * 1.1);
-            enemyHp -= player3Damage;
-            if (enemyHp < 0) enemyHp = 0;
-            enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
             queueText(HEALER.name + " did " + player3Damage.toFixed(0) + " damage" + (defender_anger ? " (Enraged)" : ""), textSpeeds.normal, () => shakeSprite(spriteEnemy));
             if (enemy_attack == "defend") {
+                playSound("defend-hit");
                 queueText("But the enemy defended the attack, and takes " + Math.round(player3Damage / 6) + " dmg");
                 enemyHp -= Math.round(player3Damage / 6)
+                enemy_stamina += 0.5;
                 await sleep(2500);
             } else {
+                playSound("hit");
                 enemyHp -= player3Damage;
+                if (enemy_attack == "main" && enemy_main_charging) main_damage_dealt += player3Damage;
             }
             if (enemyHp < 0) enemyHp = 0;
             enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
@@ -620,9 +782,11 @@ async function BeginAttack() {
             queueText(HEALER.name + " defends herself", textSpeeds.normal, () => setPlayerSprite(HEALER, 'defend'));
         } else if (HEALER.move == "secondary") {
             const selfNote = healTarget === HEALER ? "" : " and restores 10hp to themselves";
+            playSound("heal");
             queueText(HEALER.name + " uses Medical Aid on " + healTarget.name + ", (+" + Math.round(lastHealAmount) + "hp)" + selfNote);
         } else if (HEALER.move == "main") {
             const alivePlayers = [ATTACKER, DEFENDER, HEALER].filter(p => p.health > 0);
+            playSound("fresh-air");
 
             if (alivePlayers.length === 3) {
                 [ATTACKER, DEFENDER, HEALER].forEach(p => {
@@ -656,6 +820,8 @@ async function BeginAttack() {
     }
 
     if (enemyHp <= 0) {
+        playSound('dead');
+        setOnQueueEmpty(() => showEndScreen('win'));
         queueText("The enemy died", textSpeeds.normal, () => { spriteEnemy.querySelector('img').src = 'Enemy_dead2.png'; });
         queueText("You win");
         atkbtn.disabled = true;
@@ -671,6 +837,7 @@ async function BeginAttack() {
         if (livingPlayers.length === 0) {
             queueText("The enemy wins");
             atkbtn.disabled = true;
+            setOnQueueEmpty(() => showEndScreen('lose'));
             return;
         }
 
@@ -680,10 +847,141 @@ async function BeginAttack() {
         } else if (enemy_attack == "defend") {
             queueText("The enemy focused on defending and did not attack!", textSpeeds.normal, () => { spriteEnemy.querySelector('img').src = 'Enemy_final.png'; });
         } else if (enemy_attack == "heal") {
+            playSound("enemy-heal");
             const healAmount = getRandomInteger(20, 40);
             enemyHp = Math.min(enemyHp + healAmount, fullEnemyHp);
             enemyHpDisplay.textContent = "Enemy HP: " + enemyHp.toFixed(0);
             queueText("The enemy heals itself for " + healAmount + " hp!", textSpeeds.normal, () => { spriteEnemy.querySelector('img').src = 'Enemy_final.png'; });
+        } else if (enemy_attack == "main") {
+            if (!enemy_main_charging) {
+                enemy_stamina -= enemy_main_stamina;
+                main_cancel = getRandomInteger(20, 30);
+                main_damage_dealt = 0;
+                spriteEnemy.querySelector('img').src = 'enemy_main.png';
+                queueText("The enemy is charging up its special attack! You need to do " + main_cancel + " damage to cancel the attack!");
+                playSound("light-charge")
+                enemy_main_charging = true;
+            } else {
+            if (main_damage_dealt >= main_cancel) {
+                spriteEnemy.querySelector('img').src = 'Enemy_main_cancel.png';
+                queueText("The enemy took too much damage and couldn't do the attack!");
+            } else {
+                let mainAttackDamage = getRandomInteger(80, 100);
+                const target = livingPlayers[Math.floor(Math.random() * livingPlayers.length)];
+                const targetSprite = [spriteAttacker, spriteDefender, spriteHealer][target - 1];
+                const targetName = [ATTACKER, DEFENDER, HEALER][target - 1].name;
+                spriteEnemy.querySelector('img').src = 'Enemy_main_attack.png';
+                playSound("light-attack")
+                queueText("The enemy's special attack hits " + targetName + " for " + mainAttackDamage + " damage!", textSpeeds.normal, () => shakeSprite(targetSprite));
+                if (target == 1) {
+                    if (ATTACKER.shield_hp > 0) {
+                        let shield_damage = mainAttackDamage - ATTACKER.shield_hp;
+                        if (shield_damage > 0) {
+                            ATTACKER.shield_hp = 0;
+                            ATTACKER.shield_turns = 0;
+                            ATTACKER.health -= shield_damage;
+                            queueText("The shield broke and " + ATTACKER.name + " takes " + shield_damage.toFixed(0) + " damage!");
+                        } else {
+                            ATTACKER.shield_hp -= mainAttackDamage;
+                            queueText("The shield absorbed all the damage! (" + ATTACKER.shield_hp.toFixed(0) + "hp remaining)");
+                        }
+                        updateShieldDisplays();
+                    } else if (ATTACKER.state == "defend") {
+                        playSound("defend-hit");
+                        ATTACKER.health -= (mainAttackDamage / 5);
+                        queueText("But " + ATTACKER.name + " defends and takes " + (mainAttackDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(ATTACKER, 'final'));
+                        Stamina += 2;
+                    } else {
+                        ATTACKER.health -= mainAttackDamage;
+                    }
+                    if (ATTACKER.health <= 0) {
+                        ATTACKER.health = 0;
+                        ATTACKER.state = "dead";
+                        ATTACKER.shield_hp = 0;
+                        ATTACKER.shield_turns = 0;
+                        playSound('dead');
+                        queueText(ATTACKER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(ATTACKER, true));
+                        defCooldownText1.textContent = "";
+                        mainCooldownText1.textContent = "";
+                        updateShieldDisplays();
+                    }
+                    player1HpDisplay.textContent = ATTACKER.name + " HP: " + ATTACKER.health.toFixed(0);
+                } else if (target == 2) {
+                    if (DEFENDER.shield_hp > 0) {
+                        let shield_damage = mainAttackDamage - DEFENDER.shield_hp;
+                        if (shield_damage > 0) {
+                            DEFENDER.shield_hp = 0;
+                            DEFENDER.shield_turns = 0;
+                            DEFENDER.health -= shield_damage;
+                            queueText("The shield broke and " + DEFENDER.name + " takes " + shield_damage.toFixed(0) + " damage!");
+                        } else {
+                            DEFENDER.shield_hp -= mainAttackDamage;
+                            queueText("The shield absorbed all the damage! (" + DEFENDER.shield_hp.toFixed(0) + "hp remaining)");
+                        }
+                        updateShieldDisplays();
+                    } else if (DEFENDER.state == "defend") {
+                        playSound("defend-hit");
+                        DEFENDER.health -= (mainAttackDamage / 5);
+                        queueText("But " + DEFENDER.name + " defends and takes " + (mainAttackDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(DEFENDER, 'final'));
+                        Stamina += 2;
+                    } else {
+                        DEFENDER.health -= mainAttackDamage;
+                    }
+                    if (DEFENDER.health <= 0) {
+                        DEFENDER.health = 0;
+                        DEFENDER.state = "dead";
+                        DEFENDER.shield_hp = 0;
+                        DEFENDER.shield_turns = 0;
+                        playSound('dead');
+                        queueText(DEFENDER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(DEFENDER, true));
+                        defCooldownText2.textContent = "";
+                        secCooldownText2.textContent = "";
+                        enrageCounterText.textContent = "";
+                        updateShieldDisplays();
+                    }
+                    player2HpDisplay.textContent = DEFENDER.name + " HP: " + DEFENDER.health.toFixed(0);
+                } else {
+                    if (HEALER.shield_hp > 0) {
+                        let shield_damage = mainAttackDamage - HEALER.shield_hp;
+                        if (shield_damage > 0) {
+                            HEALER.shield_hp = 0;
+                            HEALER.shield_turns = 0;
+                            HEALER.health -= shield_damage;
+                            queueText("The shield broke and " + HEALER.name + " takes " + shield_damage.toFixed(0) + " damage!");
+                        } else {
+                            HEALER.shield_hp -= mainAttackDamage;
+                            queueText("The shield absorbed all the damage! (" + HEALER.shield_hp.toFixed(0) + "hp remaining)");
+                        }
+                        updateShieldDisplays();
+                    } else if (HEALER.state == "defend") {
+                        playSound("defend-hit");
+                        HEALER.health -= (mainAttackDamage / 5);
+                        queueText("But " + HEALER.name + " defends and takes " + (mainAttackDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(HEALER, 'final'));
+                        Stamina += 2;
+                    } else {
+                        HEALER.health -= mainAttackDamage;
+                    }
+                    if (HEALER.health <= 0) {
+                        HEALER.health = 0;
+                        HEALER.state = "dead";
+                        HEALER.shield_hp = 0;
+                        HEALER.shield_turns = 0;
+                        playSound('dead');
+                        queueText(HEALER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(HEALER, true));
+                        defCooldownText3.textContent = "";
+                        updateShieldDisplays();
+                    }
+                    player3HpDisplay.textContent = HEALER.name + " HP: " + HEALER.health.toFixed(0);
+                }
+                if ((ATTACKER.health <= 0) && (DEFENDER.health <= 0) && (HEALER.health <= 0)) {
+                    queueText("The enemy wins");
+                    atkbtn.disabled = true;
+                    setOnQueueEmpty(() => showEndScreen('lose'));
+                    return;
+                }
+            }
+            enemy_main_charging = false;
+            }
         } else {
             let enemyDamage = getRandomInteger(50, 80);
             let weakenedNote = "";
@@ -718,10 +1016,12 @@ async function BeginAttack() {
                     }
                     updateShieldDisplays();
                 } else if (ATTACKER.state == "defend") {
+                    playSound("defend-hit");
                     ATTACKER.health -= (enemyDamage / 5)
                     queueText("But " + ATTACKER.name + " protects himself and takes " + (enemyDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(ATTACKER, 'final'));
                     Stamina += 2
                 } else {
+                    playSound("hit");
                     ATTACKER.health -= enemyDamage;
                 }
 
@@ -730,6 +1030,7 @@ async function BeginAttack() {
                     ATTACKER.state = "dead";
                     ATTACKER.shield_hp = 0;
                     ATTACKER.shield_turns = 0;
+                    playSound('dead');
                     queueText(ATTACKER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(ATTACKER, true));
                     defCooldownText1.textContent = "";
                     mainCooldownText1.textContent = "";
@@ -760,10 +1061,12 @@ async function BeginAttack() {
                     }
                     updateShieldDisplays();
                 } else if (DEFENDER.state == "defend") {
+                    playSound("defend-hit");
                     DEFENDER.health -= (enemyDamage / 5)
                     queueText("But " + DEFENDER.name + " protects himself and takes " + (enemyDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(DEFENDER, 'final'));
                     Stamina += 2
                 } else {
+                    playSound("hit");
                     DEFENDER.health -= enemyDamage;
                 }
 
@@ -772,6 +1075,7 @@ async function BeginAttack() {
                     DEFENDER.state = "dead";
                     DEFENDER.shield_hp = 0;
                     DEFENDER.shield_turns = 0;
+                    playSound('dead');
                     queueText(DEFENDER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(DEFENDER, true));
                     defCooldownText2.textContent = "";
                     secCooldownText2.textContent = "";
@@ -794,10 +1098,12 @@ async function BeginAttack() {
                     }
                     updateShieldDisplays();
                 } else if (HEALER.state == "defend") {
+                    playSound("defend-hit");
                     HEALER.health -= (enemyDamage / 5)
                     queueText("But " + HEALER.name + " protects herself and takes " + (enemyDamage / 5).toFixed(0) + " damage", textSpeeds.normal, () => setPlayerSprite(HEALER, 'final'));
                     Stamina += 2
                 } else {
+                    playSound("hit");
                     HEALER.health -= enemyDamage;
                 }
 
@@ -806,6 +1112,7 @@ async function BeginAttack() {
                     HEALER.state = "dead";
                     HEALER.shield_hp = 0;
                     HEALER.shield_turns = 0;
+                    playSound('dead');
                     queueText(HEALER.name + " has fallen", textSpeeds.normal, () => updateSpriteState(HEALER, true));
                     defCooldownText3.textContent = "";
                     updateShieldDisplays();
@@ -816,11 +1123,13 @@ async function BeginAttack() {
             if ((ATTACKER.health <= 0) && (DEFENDER.health <= 0) && (HEALER.health <= 0)) {
                 queueText("The enemy wins");
                 atkbtn.disabled = true;
+                setOnQueueEmpty(() => showEndScreen('lose'));
                 return;
             }
         }
 
         Stamina += 1
+        enemy_stamina += 1;
         stamina_display.textContent = Stamina;
 
         [ATTACKER, DEFENDER, HEALER].forEach(player => {
@@ -896,7 +1205,7 @@ async function BeginAttack() {
             if (ATTACKER.state !== "dead") { defbtn.disabled = false; ATTACKER.state = "default"; setPlayerSprite(ATTACKER, 'final'); }
             if (DEFENDER.state !== "dead") { defbtn2.disabled = false; DEFENDER.state = "default"; setPlayerSprite(DEFENDER, 'final'); }
             if (HEALER.state !== "dead") { defbtn3.disabled = false; HEALER.state = "default"; setPlayerSprite(HEALER, 'final'); }
-            spriteEnemy.querySelector('img').src = 'Enemy_final.png';
+            if (!enemy_main_charging) spriteEnemy.querySelector('img').src = 'Enemy_final.png';
 
             if (ATTACKER.state !== "dead") {
                 if (ATTACKER.move === "defend") ATTACKER.def_cooldown = 1;
@@ -1067,3 +1376,13 @@ secbtn3.addEventListener("click", function () {
 healBtn1.addEventListener("click", function () { applyHeal(ATTACKER); });
 healBtn2.addEventListener("click", function () { applyHeal(DEFENDER); });
 healBtn3.addEventListener("click", function () { applyHeal(HEALER); });
+
+function setEnemyHp() {
+    const input = document.getElementById('hp-setter-input');
+    if (input.value === '') return;
+    const hp = parseInt(input.value);
+    if (!isNaN(hp) && hp > 0) {
+        localStorage.setItem('enemyHpOverride', hp);
+        location.reload();
+    }
+}

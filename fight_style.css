@@ -55,6 +55,36 @@ INSTRUCTIONS
     min-height: 0.8em;
 }
 
+.hp-setter {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hp-setter input {
+    width: 90px;
+    padding: 4px 8px;
+    border: 1px solid #aaa;
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    font-size: 0.95em;
+}
+
+.hp-setter button {
+    padding: 4px 10px;
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    font-size: 0.95em;
+    cursor: pointer;
+    border: 1px solid #aaa;
+    background: #f5f5f5;
+}
+
+.hp-setter button:hover {
+    background: #e8e8e8;
+}
+
 /*
 -----------------------------------------------------------------------------------------------
 BATTLE SCENE
@@ -74,6 +104,7 @@ BATTLE SCENE
     border: 3px solid #1a1a1a;
     overflow: hidden;
     background: #d6d0c4;
+    position: relative;
 }
 
 .stats-bar {
